@@ -1,0 +1,38 @@
+name: 'Git X-Ray'
+description: 'Analyze PRs for deployment risk — hotspots, bus factor, hidden coupling'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: 'GitHub token for posting PR comments'
+    required: false
+    default: ${{ github.token }}
+  license-key:
+    description: 'License key for private repos (free for public repos)'
+    required: false
+  top:
+    description: 'Max results per analysis section'
+    required: false
+    default: '5'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install git-xray
+      shell: bash
+      run: pip install -q git-xray-cli
+
+    - name: Analyze PR
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_LICENSE_KEY: ${{ inputs.license-key }}
+        INPUT_TOP: ${{ inputs.top }}
+      run: python "${{ github.action_path }}/main.py"
