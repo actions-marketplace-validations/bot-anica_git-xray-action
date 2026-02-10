@@ -2,40 +2,48 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import os
 import subprocess
 import sys
 import time
 import urllib.request
-from base64 import b64decode, b64encode
+from base64 import b64decode
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
-# License validation
+# License validation (Ed25519 asymmetric — public key can only VERIFY)
 # ---------------------------------------------------------------------------
 
-_LICENSE_SECRET = b"gxr_v1_a7c3e9f2b1d8e4a6c0f5b2d9e3a7c1f4"
+# This public key can only verify signatures, not create them.
+# The private key is held by the seller and never published.
+_PUBLIC_KEY_B64 = "5znHa00Y0bHZMyYiep5JD553EwrqBhysHNnElcbyghU="
 
 
 def _verify_license(key: str, repo_owner: str) -> dict:
-    """Verify a license key. Returns {"valid": bool, "plan": str, "reason": str}."""
+    """Verify a license key using Ed25519 signature.
+
+    License format: GXRAY-<base64(payload)>.<base64(signature)>
+    Payload format: owner|plan|expiry_date
+    """
     if not key:
         return {"valid": False, "plan": "none", "reason": "no key"}
 
     try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
         if not key.startswith("GXRAY-"):
             return {"valid": False, "plan": "none", "reason": "invalid format"}
 
         raw = key[6:]
-        parts = raw.rsplit("-", 1)
+        parts = raw.split(".", 1)
         if len(parts) != 2:
             return {"valid": False, "plan": "none", "reason": "invalid format"}
 
-        payload_b64, sig_hex = parts
-        payload = b64decode(payload_b64).decode()
+        payload_b64, sig_b64 = parts
+        payload_bytes = b64decode(payload_b64)
+        sig_bytes = b64decode(sig_b64)
+        payload = payload_bytes.decode()
         fields = payload.split("|")
 
         if len(fields) != 3:
@@ -43,9 +51,12 @@ def _verify_license(key: str, repo_owner: str) -> dict:
 
         owner, plan, expiry = fields
 
-        # Verify HMAC signature
-        expected = hmac.new(_LICENSE_SECRET, payload.encode(), hashlib.sha256).hexdigest()[:32]
-        if not hmac.compare_digest(expected, sig_hex):
+        # Verify Ed25519 signature using public key
+        pub_key_bytes = b64decode(_PUBLIC_KEY_B64)
+        public_key = Ed25519PublicKey.from_public_bytes(pub_key_bytes)
+        try:
+            public_key.verify(sig_bytes, payload_bytes)
+        except Exception:
             return {"valid": False, "plan": "none", "reason": "invalid signature"}
 
         # Check owner matches (or wildcard)
@@ -58,6 +69,8 @@ def _verify_license(key: str, repo_owner: str) -> dict:
 
         return {"valid": True, "plan": plan, "reason": "ok"}
 
+    except ImportError:
+        return {"valid": False, "plan": "none", "reason": "cryptography package not installed"}
     except Exception as e:
         return {"valid": False, "plan": "none", "reason": str(e)}
 

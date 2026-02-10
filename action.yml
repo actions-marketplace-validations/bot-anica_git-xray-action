@@ -27,7 +27,7 @@ runs:
 
     - name: Install git-xray
       shell: bash
-      run: pip install -q git-xray-cli
+      run: pip install -q git-xray-cli cryptography
 
     - name: Analyze PR
       shell: bash
