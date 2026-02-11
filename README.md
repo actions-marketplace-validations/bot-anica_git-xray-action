@@ -109,9 +109,10 @@ Powered by [git-xray-cli](https://github.com/bot-anica/git-xray), an open-source
 
 ### Get a License
 
-1. **Purchase** at [git-xray.lemonsqueezy.com](https://git-xray.lemonsqueezy.com)
-2. **Add the key** to your repo → Settings → Secrets → `GIT_XRAY_LICENSE_KEY`
-3. **Update your workflow**:
+1. **[Purchase Git X-Ray Pro](https://checkout.freemius.com/product/24238/plan/40293/)** ($8.99/month or $89.99/year)
+2. **Check your email** — you'll receive your license key automatically
+3. **Add the key** to your repo → Settings → Secrets → `GIT_XRAY_LICENSE_KEY`
+4. **Update your workflow**:
 
 ```yaml
       - uses: bot-anica/git-xray-action@v1
@@ -121,7 +122,7 @@ Powered by [git-xray-cli](https://github.com/bot-anica/git-xray), an open-source
 
 That's it — bus factor and coupling analysis will activate on the next PR.
 
-> Don't have a Lemon Squeezy account? Email **bot.anica.dev@gmail.com** and we'll generate a key for you directly.
+> Questions? Email **support@anica.space**
 
 ---
 
