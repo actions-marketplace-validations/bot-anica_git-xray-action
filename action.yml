@@ -16,6 +16,10 @@ inputs:
     description: 'Max results per analysis section'
     required: false
     default: '5'
+  ai-api-key:
+    description: 'API key for AI-powered risk summaries'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -35,4 +39,5 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         INPUT_LICENSE_KEY: ${{ inputs.license-key }}
         INPUT_TOP: ${{ inputs.top }}
+        AI_API_KEY: ${{ inputs.ai-api-key }}
       run: python "${{ github.action_path }}/main.py"

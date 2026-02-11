@@ -12,6 +12,121 @@ from base64 import b64decode
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
+# AI risk summary (opt-in, graceful degradation)
+# ---------------------------------------------------------------------------
+
+_AI_ENDPOINT = "https://git-xray-webhook.vercel.app/api/ai"
+_AI_MODEL = "xray-1"
+
+
+def _build_ai_prompt(
+    pr_title: str,
+    changed_files: list[str],
+    score: int,
+    level: str,
+    result: dict,
+) -> list[dict]:
+    """Build chat messages for the AI risk summary."""
+    system = (
+        "You are a senior software engineer reviewing a pull request. "
+        "Write 2-4 sentences explaining the key risks. Be specific — "
+        "mention file names, numbers, and contributors. "
+        "No markdown headers, bullets, or formatting. Plain prose only."
+    )
+
+    # Hotspot context (top 10)
+    hotspot_lines = []
+    for h in result.get("hotspots", [])[:10]:
+        rank = result["hotspot_ranks"].get(h.path, "?")
+        total = result["total_repo_files"]
+        churn = h.total_additions + h.total_deletions
+        hotspot_lines.append(f"  {h.path} (rank #{rank}/{total}, churn: {churn})")
+
+    # Bus factor context (top 5)
+    bus_lines = []
+    seen_dirs = set()
+    for f, entry in result.get("bus_factor", [])[:5]:
+        if entry.directory in seen_dirs:
+            continue
+        seen_dirs.add(entry.directory)
+        top = entry.top_contributors[0] if entry.top_contributors else ("?", 0, 0)
+        name = top[0].split("@")[0] if "@" in top[0] else top[0]
+        pct = top[2]
+        bus_lines.append(f"  {entry.directory} — {entry.risk}, {name} ({pct:.0f}%)")
+
+    # Missing coupled (top 5)
+    coupling_lines = []
+    for missing_file, paired_with, c in result.get("missing_coupled", [])[:5]:
+        coupling_lines.append(
+            f"  {missing_file} usually changes with {paired_with} "
+            f"({c.score * 100:.0f}% coupling, {c.co_commits} co-commits)"
+        )
+
+    parts = [
+        f"PR: {pr_title}",
+        f"Risk: {level} ({score}/100)",
+        f"Files changed: {len(changed_files)}",
+    ]
+    if hotspot_lines:
+        parts.append("Hotspots:\n" + "\n".join(hotspot_lines))
+    if bus_lines:
+        parts.append("Bus factor warnings:\n" + "\n".join(bus_lines))
+    if coupling_lines:
+        parts.append("Missing coupled files:\n" + "\n".join(coupling_lines))
+
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "\n\n".join(parts)},
+    ]
+
+
+def _generate_ai_summary(
+    pr_title: str,
+    changed_files: list[str],
+    score: int,
+    level: str,
+    result: dict,
+) -> str | None:
+    """Call AI for a risk summary. Returns None on any failure."""
+    api_key = os.environ.get("AI_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    try:
+        messages = _build_ai_prompt(pr_title, changed_files, score, level, result)
+
+        payload = json.dumps({
+            "model": _AI_MODEL,
+            "messages": messages,
+            "max_tokens": 200,
+            "temperature": 0.3,
+        }).encode()
+
+        req = urllib.request.Request(
+            _AI_ENDPOINT,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        elapsed = time.time() - t0
+
+        summary = data["choices"][0]["message"]["content"].strip()
+        print(f"AI: summary generated in {elapsed:.1f}s")
+        return summary
+
+    except Exception as e:
+        print(f"AI: failed ({e}), skipping summary")
+        return None
+
+
+# ---------------------------------------------------------------------------
 # License validation (Ed25519 asymmetric — public key can only VERIFY)
 # ---------------------------------------------------------------------------
 
@@ -269,6 +384,7 @@ def _format_comment(
     level: str,
     full_analysis: bool,
     is_private: bool,
+    ai_summary: str | None = None,
 ) -> str:
     icon = _LEVEL_ICONS.get(level, "")
     lines = []
@@ -292,6 +408,16 @@ def _format_comment(
         lines.append(f"| **Warnings** | {warnings} |")
 
     lines.append("")
+
+    # AI risk summary (opt-in)
+    if ai_summary:
+        lines.append("### \U0001f9e0 AI Risk Summary")
+        lines.append("")
+        for paragraph in ai_summary.split("\n"):
+            paragraph = paragraph.strip()
+            if paragraph:
+                lines.append(f"> {paragraph}")
+        lines.append("")
 
     # Hotspots section
     hotspots = result.get("hotspots", [])
@@ -465,7 +591,11 @@ def main() -> None:
     score, level = _calculate_risk(changed_files, result, full_analysis)
     print(f"Risk: {level} ({score}/100)")
 
-    comment = _format_comment(changed_files, result, score, level, full_analysis, is_private)
+    # AI risk summary (opt-in)
+    pr_title = pr.get("title", "")
+    ai_summary = _generate_ai_summary(pr_title, changed_files, score, level, result)
+
+    comment = _format_comment(changed_files, result, score, level, full_analysis, is_private, ai_summary)
     _post_or_update_comment(repo, pr_number, comment)
     print("Comment posted.")
 

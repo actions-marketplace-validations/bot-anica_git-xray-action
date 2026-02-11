@@ -80,6 +80,30 @@ Every PR gets a comment like this:
 
 ---
 
+## AI Risk Summary (Optional)
+
+Add a natural-language risk summary to every PR comment — powered by AI.
+
+> **🧠 AI Risk Summary**
+>
+> This PR touches `src/api/handlers.py`, the #1 hotspot in the repo with 2,340 lines of churn. Only Dave has worked on `src/api/` (bus factor: 1) — consider getting his review. The test file `tests/test_handlers.py` usually changes with the handler but isn't included here.
+
+### Setup
+
+1. Get a free API key at [console.groq.com](https://console.groq.com/) (no credit card needed)
+2. Add it to your repo: Settings → Secrets → `AI_API_KEY`
+3. Update your workflow:
+
+```yaml
+      - uses: bot-anica/git-xray-action@v1
+        with:
+          ai-api-key: ${{ secrets.AI_API_KEY }}
+```
+
+**No key = no AI section, no error.** The rest of the report works exactly the same.
+
+---
+
 ## How It Works
 
 1. Runs `git log --numstat` on the full repo history (single pass, fast)
@@ -136,6 +160,9 @@ That's it — bus factor and coupling analysis will activate on the next PR.
 
     # Max results per analysis section (default: 5)
     top: 5
+
+    # AI-powered risk summary (optional — no key = no AI, no error)
+    ai-api-key: ${{ secrets.AI_API_KEY }}
 
     # GitHub token — uses the default token, override only if needed
     github-token: ${{ secrets.GITHUB_TOKEN }}
