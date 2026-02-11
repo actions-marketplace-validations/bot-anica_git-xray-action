@@ -80,27 +80,15 @@ Every PR gets a comment like this:
 
 ---
 
-## AI Risk Summary (Optional)
+## AI Risk Summary (Pro)
 
-Add a natural-language risk summary to every PR comment — powered by AI.
+Pro users get a natural-language risk summary on every PR — powered by AI.
 
 > **🧠 AI Risk Summary**
 >
 > This PR touches `src/api/handlers.py`, the #1 hotspot in the repo with 2,340 lines of churn. Only Dave has worked on `src/api/` (bus factor: 1) — consider getting his review. The test file `tests/test_handlers.py` usually changes with the handler but isn't included here.
 
-### Setup
-
-1. Get a free API key at [console.groq.com](https://console.groq.com/) (no credit card needed)
-2. Add it to your repo: Settings → Secrets → `AI_API_KEY`
-3. Update your workflow:
-
-```yaml
-      - uses: bot-anica/git-xray-action@v1
-        with:
-          ai-api-key: ${{ secrets.AI_API_KEY }}
-```
-
-**No key = no AI section, no error.** The rest of the report works exactly the same.
+The AI API key is included with your Pro license — no extra setup beyond adding the secret (see [Get a License](#get-a-license)).
 
 ---
 
@@ -129,22 +117,24 @@ Powered by [git-xray-cli](https://github.com/bot-anica/git-xray), an open-source
 | Hotspot detection | ✅ | ✅ |
 | Bus factor warnings | — | ✅ |
 | Missing coupled files | — | ✅ |
+| AI risk summary | — | ✅ |
 | **Price** | $0 | **$9/month per org** |
 
 ### Get a License
 
 1. **[Purchase Git X-Ray Pro](https://checkout.freemius.com/product/24238/plan/40293/)** ($8.99/month or $89.99/year)
-2. **Check your email** — you'll receive your license key automatically
-3. **Add the key** to your repo → Settings → Secrets → `GIT_XRAY_LICENSE_KEY`
+2. **Check your email** — you'll receive two keys: `GIT_XRAY_LICENSE_KEY` and `AI_API_KEY`
+3. **Add both keys** to your repo → Settings → Secrets and variables → Actions
 4. **Update your workflow**:
 
 ```yaml
       - uses: bot-anica/git-xray-action@v1
         with:
           license-key: ${{ secrets.GIT_XRAY_LICENSE_KEY }}
+          ai-api-key: ${{ secrets.AI_API_KEY }}
 ```
 
-That's it — bus factor and coupling analysis will activate on the next PR.
+That's it — full analysis (bus factor, coupling, and AI risk summary) activates on the next PR.
 
 > Questions? Email **support@anica.space**
 

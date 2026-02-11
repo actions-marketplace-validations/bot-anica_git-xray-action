@@ -190,6 +190,46 @@ def _verify_license(key: str, repo_owner: str) -> dict:
         return {"valid": False, "plan": "none", "reason": str(e)}
 
 
+def _verify_ai_key(key: str, repo_owner: str) -> bool:
+    """Verify an AI API key (GXAI- prefix, Ed25519 signed)."""
+    if not key or not key.startswith("GXAI-"):
+        return False
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        raw = key[5:]
+        parts = raw.split(".", 1)
+        if len(parts) != 2:
+            return False
+
+        payload_b64, sig_b64 = parts
+        payload_bytes = b64decode(payload_b64)
+        sig_bytes = b64decode(sig_b64)
+        fields = payload_bytes.decode().split("|")
+
+        if len(fields) != 2:
+            return False
+
+        owner, expiry = fields
+
+        pub_key_bytes = b64decode(_PUBLIC_KEY_B64)
+        public_key = Ed25519PublicKey.from_public_bytes(pub_key_bytes)
+        try:
+            public_key.verify(sig_bytes, payload_bytes)
+        except Exception:
+            return False
+
+        if owner != "*" and owner.lower() != repo_owner.lower():
+            return False
+
+        if datetime.strptime(expiry, "%Y-%m-%d") < datetime.now():
+            return False
+
+        return True
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # GitHub helpers
 # ---------------------------------------------------------------------------
@@ -545,21 +585,27 @@ def main() -> None:
 
     print(f"Analyzing PR #{pr_number} on {repo} (base: {base_ref})")
 
-    # License check
+    # License / AI key check
     license_key = os.environ.get("INPUT_LICENSE_KEY", "")
-    if is_private and license_key:
+    ai_api_key = os.environ.get("AI_API_KEY", "").strip()
+    ai_key_valid = _verify_ai_key(ai_api_key, repo_owner)
+
+    if not is_private:
+        full_analysis = True
+        print("Public repo — full analysis (free)")
+    elif license_key:
         lic = _verify_license(license_key, repo_owner)
         full_analysis = lic["valid"]
         if not lic["valid"]:
             print(f"License: {lic['reason']} — running limited analysis")
         else:
             print(f"License: valid ({lic['plan']} plan)")
-    elif is_private:
+    elif ai_key_valid:
+        full_analysis = True
+        print("AI key valid — full analysis enabled")
+    else:
         full_analysis = False
         print("Private repo without license — running limited analysis")
-    else:
-        full_analysis = True
-        print("Public repo — full analysis (free)")
 
     top_n = int(os.environ.get("INPUT_TOP", "5"))
 
