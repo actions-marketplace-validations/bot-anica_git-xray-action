@@ -26,12 +26,17 @@ def _build_ai_prompt(
     level: str,
     result: dict,
 ) -> list[dict]:
-    """Build chat messages for the AI risk summary."""
+    """Build chat messages for per-section AI analysis."""
     system = (
         "You are a senior software engineer reviewing a pull request. "
-        "Write 2-4 sentences explaining the key risks. Be specific — "
-        "mention file names, numbers, and contributors. "
-        "No markdown headers, bullets, or formatting. Plain prose only."
+        "Analyze the data and provide insights for each section. "
+        "Be specific — mention file names, numbers, and contributors. "
+        "Plain prose only, 1-2 sentences per section.\n\n"
+        "You MUST use exactly this format (include only sections that have data):\n"
+        "OVERVIEW: <1-2 sentence overall risk assessment>\n"
+        "HOTSPOTS: <1-2 sentence analysis of hotspot files>\n"
+        "BUS_FACTOR: <1-2 sentence analysis of bus factor risks>\n"
+        "COUPLING: <1-2 sentence analysis of missing coupled files>"
     )
 
     # Hotspot context (top 10)
@@ -80,14 +85,45 @@ def _build_ai_prompt(
     ]
 
 
-def _generate_ai_summary(
+def _parse_ai_sections(raw: str) -> dict[str, str]:
+    """Parse AI response into sections: overview, hotspots, bus_factor, coupling."""
+    sections = {}
+    current_key = None
+    current_text = []
+
+    for line in raw.split("\n"):
+        line = line.strip()
+        matched = False
+        for prefix, key in [
+            ("OVERVIEW:", "overview"),
+            ("HOTSPOTS:", "hotspots"),
+            ("BUS_FACTOR:", "bus_factor"),
+            ("COUPLING:", "coupling"),
+        ]:
+            if line.upper().startswith(prefix):
+                if current_key:
+                    sections[current_key] = " ".join(current_text).strip()
+                current_key = key
+                current_text = [line[len(prefix):].strip()]
+                matched = True
+                break
+        if not matched and current_key:
+            current_text.append(line)
+
+    if current_key:
+        sections[current_key] = " ".join(current_text).strip()
+
+    return sections
+
+
+def _generate_ai_analysis(
     pr_title: str,
     changed_files: list[str],
     score: int,
     level: str,
     result: dict,
-) -> str | None:
-    """Call AI for a risk summary. Returns None on any failure."""
+) -> dict[str, str] | None:
+    """Call AI for per-section analysis. Returns dict of sections or None."""
     api_key = os.environ.get("AI_API_KEY", "").strip()
     if not api_key:
         return None
@@ -98,7 +134,7 @@ def _generate_ai_summary(
         payload = json.dumps({
             "model": _AI_MODEL,
             "messages": messages,
-            "max_tokens": 200,
+            "max_tokens": 400,
             "temperature": 0.3,
         }).encode()
 
@@ -113,16 +149,17 @@ def _generate_ai_summary(
         )
 
         t0 = time.time()
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
         elapsed = time.time() - t0
 
-        summary = data["choices"][0]["message"]["content"].strip()
-        print(f"AI: summary generated in {elapsed:.1f}s")
-        return summary
+        raw = data["choices"][0]["message"]["content"].strip()
+        sections = _parse_ai_sections(raw)
+        print(f"AI: analysis generated in {elapsed:.1f}s ({len(sections)} sections)")
+        return sections if sections else None
 
     except Exception as e:
-        print(f"AI: failed ({e}), skipping summary")
+        print(f"AI: failed ({e}), skipping analysis")
         return None
 
 
@@ -417,6 +454,17 @@ def _bar(value: float, width: int = 8) -> str:
     return "\u2593" * filled + "\u2591" * (width - filled)
 
 
+def _ai_blockquote(text: str) -> list[str]:
+    """Format AI text as a blockquote."""
+    lines = []
+    for paragraph in text.split("\n"):
+        paragraph = paragraph.strip()
+        if paragraph:
+            lines.append(f"> \U0001f9e0 {paragraph}")
+    lines.append("")
+    return lines
+
+
 def _format_comment(
     changed_files: list[str],
     result: dict,
@@ -424,10 +472,11 @@ def _format_comment(
     level: str,
     full_analysis: bool,
     is_private: bool,
-    ai_summary: str | None = None,
+    ai_sections: dict[str, str] | None = None,
 ) -> str:
     icon = _LEVEL_ICONS.get(level, "")
     lines = []
+    ai = ai_sections or {}
 
     lines.append(f"## {icon} Git X-Ray \u2014 PR Risk Analysis")
     lines.append("")
@@ -449,15 +498,9 @@ def _format_comment(
 
     lines.append("")
 
-    # AI risk summary (opt-in)
-    if ai_summary:
-        lines.append("### \U0001f9e0 AI Risk Summary")
-        lines.append("")
-        for paragraph in ai_summary.split("\n"):
-            paragraph = paragraph.strip()
-            if paragraph:
-                lines.append(f"> {paragraph}")
-        lines.append("")
+    # AI overview
+    if ai.get("overview"):
+        lines.extend(_ai_blockquote(ai["overview"]))
 
     # Hotspots section
     hotspots = result.get("hotspots", [])
@@ -482,6 +525,8 @@ def _format_comment(
             )
 
         lines.append("")
+        if ai.get("hotspots"):
+            lines.extend(_ai_blockquote(ai["hotspots"]))
 
     # Bus factor section
     bus_warnings = result.get("bus_factor", [])
@@ -513,6 +558,8 @@ def _format_comment(
             )
 
         lines.append("")
+        if ai.get("bus_factor"):
+            lines.extend(_ai_blockquote(ai["bus_factor"]))
 
     # Missing coupled files section
     missing = result.get("missing_coupled", [])
@@ -534,6 +581,8 @@ def _format_comment(
             )
 
         lines.append("")
+        if ai.get("coupling"):
+            lines.extend(_ai_blockquote(ai["coupling"]))
 
     # Upgrade CTA for private repos without license
     if is_private and not full_analysis:
@@ -637,11 +686,11 @@ def main() -> None:
     score, level = _calculate_risk(changed_files, result, full_analysis)
     print(f"Risk: {level} ({score}/100)")
 
-    # AI risk summary (opt-in)
+    # AI analysis (opt-in, per-section)
     pr_title = pr.get("title", "")
-    ai_summary = _generate_ai_summary(pr_title, changed_files, score, level, result)
+    ai_sections = _generate_ai_analysis(pr_title, changed_files, score, level, result)
 
-    comment = _format_comment(changed_files, result, score, level, full_analysis, is_private, ai_summary)
+    comment = _format_comment(changed_files, result, score, level, full_analysis, is_private, ai_sections)
     _post_or_update_comment(repo, pr_number, comment)
     print("Comment posted.")
 
