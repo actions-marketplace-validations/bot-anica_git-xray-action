@@ -62,6 +62,8 @@ Every PR gets a comment like this:
 > | `src/core/engine.py` | #3 of 342 | ▓▓▓▓▓░░░ | +1,203/-987 |
 > | `src/models/user.py` | #12 of 342 | ▓▓▓░░░░░ | +540/-320 |
 >
+> > **🧠 AI Insight:** `handlers.py` is the #1 hotspot with heavy churn — extra review here is well worth the time. `engine.py` is rising fast in the rankings.
+>
 > ### ⚠️ Bus Factor Warnings
 >
 > These areas have concentrated knowledge — if key contributors leave, the code becomes risky.
@@ -70,6 +72,8 @@ Every PR gets a comment like this:
 > |------|------|-----------------|
 > | `src/api/` | 🔴 CRITICAL | **dave** (91% of commits) |
 >
+> > **🧠 AI Insight:** Dave is the sole expert on `src/api/` — consider getting his review, and pairing another engineer on this area to spread knowledge.
+>
 > ### 🔗 Possibly Missing Files
 >
 > These files usually change together with files in this PR but weren't included.
@@ -77,16 +81,28 @@ Every PR gets a comment like this:
 > | Missing File | Paired With | Coupling | Co-Commits |
 > |-------------|-------------|----------|------------|
 > | `tests/test_handlers.py` | `src/api/handlers.py` | 87% | 45 |
+>
+> > **🧠 AI Insight:** `test_handlers.py` changes with `handlers.py` 87% of the time — this PR likely needs matching test updates.
 
 ---
 
-## AI Risk Summary (Pro)
+## AI Insights (Pro)
 
-Pro users get a natural-language risk summary on every PR — powered by AI.
+Pro users get per-section AI insights on every PR — powered by AI. Each analysis section (hotspots, bus factor, coupling) gets its own targeted insight, so you know exactly what matters and why.
 
-> **🧠 AI Risk Summary**
+> ### 🔥 Hotspot Files in This PR
+> | File | Repo Rank | Risk | Churn |
+> |------|-----------|------|-------|
+> | `src/api/handlers.py` | #1 of 342 | ▓▓▓▓▓▓▓░ | +2,340/-1,892 |
 >
-> This PR touches `src/api/handlers.py`, the #1 hotspot in the repo with 2,340 lines of churn. Only Dave has worked on `src/api/` (bus factor: 1) — consider getting his review. The test file `tests/test_handlers.py` usually changes with the handler but isn't included here.
+> > **🧠 AI Insight:** `handlers.py` is the #1 hotspot with heavy churn — extra review here is well worth the time.
+>
+> ### ⚠️ Bus Factor Warnings
+> | Area | Risk | Key Contributor |
+> |------|------|-----------------|
+> | `src/api/` | 🔴 CRITICAL | **dave** (91% of commits) |
+>
+> > **🧠 AI Insight:** Dave is the sole expert on `src/api/` — consider getting his review, and pairing another engineer on this area.
 
 The AI API key is included with your Pro license — no extra setup beyond adding the secret (see [Get a License](#get-a-license)).
 
@@ -117,7 +133,7 @@ Powered by [git-xray-cli](https://github.com/bot-anica/git-xray), an open-source
 | Hotspot detection | ✅ | ✅ |
 | Bus factor warnings | — | ✅ |
 | Missing coupled files | — | ✅ |
-| AI risk summary | — | ✅ |
+| AI insights (per-section) | — | ✅ |
 | **Price** | $0 | **$9/month per org** |
 
 ### Get a License
@@ -134,7 +150,7 @@ Powered by [git-xray-cli](https://github.com/bot-anica/git-xray), an open-source
           ai-api-key: ${{ secrets.AI_API_KEY }}
 ```
 
-That's it — full analysis (bus factor, coupling, and AI risk summary) activates on the next PR.
+That's it — full analysis (bus factor, coupling, and AI insights) activates on the next PR.
 
 > Questions? Email **support@anica.space**
 
@@ -151,7 +167,7 @@ That's it — full analysis (bus factor, coupling, and AI risk summary) activate
     # Max results per analysis section (default: 5)
     top: 5
 
-    # AI-powered risk summary (optional — no key = no AI, no error)
+    # AI-powered per-section insights (optional — no key = no AI, no error)
     ai-api-key: ${{ secrets.AI_API_KEY }}
 
     # GitHub token — uses the default token, override only if needed
@@ -171,4 +187,4 @@ That's it — full analysis (bus factor, coupling, and AI risk summary) activate
 
 - [git-xray-cli](https://github.com/bot-anica/git-xray) — the open-source analysis engine (MIT)
 - [Report an issue](https://github.com/bot-anica/git-xray-action/issues)
-- [Email support](mailto:bot.anica.dev@gmail.com)
+- [Email support](mailto:support@anica.space)
